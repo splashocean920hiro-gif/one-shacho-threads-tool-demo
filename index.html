@@ -166,7 +166,9 @@ input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 .badge-proofing { background: var(--warning); }
 .badge-approved { background: var(--blue); }
 .badge-rejected { background: var(--critical); }
+.badge-scheduled { background: var(--accent-th); }
 .badge-posted { background: var(--good); }
+.badge-failed { background: var(--critical); }
 
 .set-card {
   background: var(--card); border: 1px solid rgba(30,20,10,0.05);
@@ -177,7 +179,9 @@ input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 .set-card:has(.badge-proofing) { border-left-color: var(--warning); }
 .set-card:has(.badge-approved) { border-left-color: var(--blue); }
 .set-card:has(.badge-rejected) { border-left-color: var(--critical); }
+.set-card:has(.badge-scheduled) { border-left-color: var(--accent-th); }
 .set-card:has(.badge-posted) { border-left-color: var(--good); }
+.set-card:has(.badge-failed) { border-left-color: var(--critical); }
 .set-card .set-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
 .set-card .set-head .when { font-size: 0.78rem; font-weight: bold; color: var(--muted); }
 .schedule-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--beige); border-radius: var(--r-sm); padding: 8px 10px; }
@@ -730,14 +734,21 @@ function updatePostStatus(id, status, extra) {
 function sendToChatwork(id) { updatePostStatus(id, 'proofing'); }
 function approveSet(id) { updatePostStatus(id, 'approved'); }
 function rejectSet(id) { updatePostStatus(id, 'rejected'); }
-function postSet(id) {
-  const impressions = Math.floor(Math.random() * 22000) + 2000; // 2,000〜24,000
-  updatePostStatus(id, 'posted', { impressions });
+function scheduleSet(id) { updatePostStatus(id, 'scheduled'); }
+function executeSet(id) {
+  const success = Math.random() < 0.85; // デモ：85%の確率で成功
+  if (success) {
+    const impressions = Math.floor(Math.random() * 22000) + 2000; // 2,000〜24,000
+    updatePostStatus(id, 'posted', { impressions });
+  } else {
+    updatePostStatus(id, 'failed', { impressions: null });
+  }
 }
+function isTodayOrPast(dateStr) { return dateStr <= formatDate(new Date()); }
 
 const STATUS_LABEL = {
   draft: '未添削', proofing: '添削中', approved: '添削完了',
-  rejected: '差し戻し', posted: '投稿済み',
+  rejected: '差し戻し', scheduled: '予約済み', posted: '投稿済み', failed: '投稿失敗',
 };
 
 function renderCalendarPage() {
@@ -772,8 +783,16 @@ function renderCalendarPage() {
               <button class="btn small good" onclick="approveSet('${p.id}')">添削完了にする（承認シミュレート）</button>
               <button class="btn small critical" onclick="rejectSet('${p.id}')">差し戻す</button>
             ` : ''}
-            ${p.status === 'approved' ? `<button class="btn small good" onclick="postSet('${p.id}')">投稿を実行（デモ）</button>` : ''}
+            ${p.status === 'approved' ? (
+              isTodayOrPast(p.date)
+                ? `<button class="btn small good" onclick="executeSet('${p.id}')">投稿を実行（デモ）</button>`
+                : `<button class="btn small" onclick="scheduleSet('${p.id}')">投稿を予約</button>`
+            ) : ''}
+            ${p.status === 'scheduled' && isTodayOrPast(p.date) ? `<button class="btn small good" onclick="executeSet('${p.id}')">投稿を実行（デモ）</button>` : ''}
+            ${p.status === 'failed' ? `<button class="btn small good" onclick="executeSet('${p.id}')">再実行する</button>` : ''}
           </div>
+          ${p.status === 'scheduled' && !isTodayOrPast(p.date) ? `<div class="impressions">🗓 ${shortDate(p.date)}（${weekdayLabel(p.date)}） ${p.time} に自動投稿予定</div>` : ''}
+          ${p.status === 'failed' ? `<div class="impressions">⚠️ 投稿に失敗しました（デモ：ランダムでの失敗シミュレート）</div>` : ''}
           ${p.status === 'posted' ? `<div class="impressions">📊 インプレッション: ${p.impressions.toLocaleString()}${p.impressions >= 10000 ? '（伸びた投稿🎉）' : ''}</div>` : ''}
         </div>
       `;
@@ -801,7 +820,8 @@ function renderAnalytics() {
   const stats = [
     { val: allPosts.length, lbl: '総投稿数' },
     { val: allPosts.filter(s => s.status === 'proofing').length, lbl: '添削中' },
-    { val: allPosts.filter(s => s.status === 'approved').length, lbl: '添削完了' },
+    { val: allPosts.filter(s => s.status === 'scheduled').length, lbl: '予約済み' },
+    { val: allPosts.filter(s => s.status === 'failed').length, lbl: '投稿失敗' },
     { val: posted.length, lbl: '投稿済み' },
     { val: grown.length, lbl: '伸びた投稿(1万超)' },
   ];
