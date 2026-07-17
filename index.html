@@ -337,12 +337,12 @@ input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
   <section id="tab-reference" class="tab-content" style="display:none;">
     <div class="panel">
       <div class="panel-title">参照投稿を登録（ツリー形式）</div>
-      <p class="note">ONE社長のXアカウントで伸びている投稿を、本文＋リプライ2件のツリー構造のまま登録してください。投稿生成時の参考材料になります（リプライがない投稿は空欄でOK）。</p>
+      <p class="note">Threadsで実際に伸びている投稿を、投稿者は問わず本文＋リプライ2件のツリー構造のまま登録してください。投稿生成時の参考材料になります（リプライがない投稿は空欄でOK）。</p>
       <div class="fg"><label>本文</label><textarea id="ref-main" placeholder="伸びていた投稿の本文"></textarea></div>
       <div class="fg"><label>リプライ1 <span class="sub-hint">（任意）</span></label><textarea id="ref-reply1" rows="2" placeholder="ツリーの1つ目のリプライ"></textarea></div>
       <div class="fg"><label>リプライ2 <span class="sub-hint">（任意）</span></label><textarea id="ref-reply2" rows="2" placeholder="ツリーの2つ目のリプライ"></textarea></div>
       <div class="row2">
-        <div class="fg"><label>投稿URL</label><input id="ref-url" placeholder="https://x.com/..."></div>
+        <div class="fg"><label>投稿URL</label><input id="ref-url" placeholder="https://www.threads.com/@.../post/..."></div>
         <div class="fg"><label>投稿日</label><input id="ref-date" type="date"></div>
       </div>
       <div class="row2">
@@ -624,7 +624,7 @@ async function generatePosts(mode) {
 
   try {
     if (mode === 'bulk') {
-      const prompt = `あなたはSNS運用のプロです。以下はONE社長のXアカウントで過去に伸びた参照投稿です（ツリー形式）。
+      const prompt = `あなたはSNS運用のプロです。以下はThreadsで実際に伸びた参照投稿です（投稿者は様々です、ツリー形式）。
 ${libText}
 
 これらの傾向を踏まえ、ONE社長のThreadsアカウント向けに来週1週間分の投稿を作成してください。
@@ -654,7 +654,7 @@ ${state.template.rules}
       saveState();
       statusEl.textContent = `✅ ${sets.length}件生成し、来週のスケジュールに反映しました。「今週の投稿カレンダー」で確認できます。`;
     } else {
-      const prompt = `あなたはSNS運用のプロです。以下はONE社長のXアカウントで過去に伸びた参照投稿です（ツリー形式）。
+      const prompt = `あなたはSNS運用のプロです。以下はThreadsで実際に伸びた参照投稿です（投稿者は様々です、ツリー形式）。
 ${libText}
 
 これらの傾向を踏まえ、ONE社長のThreadsアカウント向けに投稿を1件だけ作成してください。
