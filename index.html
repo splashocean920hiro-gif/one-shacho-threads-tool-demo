@@ -316,6 +316,15 @@ input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
         </div>
       </div>
 
+      <div class="api-card">
+        <h3><span class="status-dot" id="dot-archive"></span> Threadsバズ投稿アーカイブ（自動収集・参照投稿タブに自動反映）</h3>
+        <div class="status-line">buzz-threads-collector拡張機能が収集した投稿を取り込みます</div>
+        <div class="row2">
+          <div class="fg"><label>アーカイブURL</label><input id="key-archive-url" placeholder="https://buzz-threads-archive-production.up.railway.app"></div>
+          <div class="fg"><label>Ingestキー</label><input id="key-archive-key" type="password" placeholder="共有キー"></div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -335,11 +344,18 @@ input[type=time]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
         <div class="fg"><label>いいね数</label><input id="ref-likes" type="number" min="0" placeholder="0"></div>
         <div class="fg"><label>リプライ件数（元投稿の反応数）</label><input id="ref-replies" type="number" min="0" placeholder="0"></div>
       </div>
+      <div class="fg"><label>インプレッション数 <span class="sub-hint">（任意）</span></label><input id="ref-impressions" type="number" min="0" placeholder="0"></div>
       <button class="btn data" id="ref-add-btn" style="margin-top:6px;">参照投稿に追加</button>
     </div>
 
     <div class="panel">
-      <div class="panel-title">登録済み（<span id="ref-count">0</span>件）</div>
+      <div class="panel-title-row" style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="panel-title">登録済み（<span id="ref-count">0</span>件）</div>
+        <div>
+          <button class="btn secondary small" id="ref-sync-btn" type="button">🔄 今すぐ同期</button>
+          <span id="ref-sync-status" style="font-size:0.72rem;color:var(--muted);margin-left:6px;"></span>
+        </div>
+      </div>
       <div id="ref-list"></div>
     </div>
   </section>
@@ -389,7 +405,7 @@ const DEFAULT_TEMPLATE_RULES = `- 各投稿は「本文」+「リプライ1」+�
 
 function defaultState() {
   return {
-    apiKeys: { gemini: '', threadsUserId: '', threadsToken: '' },
+    apiKeys: { gemini: '', threadsUserId: '', threadsToken: '', archiveUrl: '', archiveKey: '' },
     template: { rules: DEFAULT_TEMPLATE_RULES },
     library: [],
     posts: [],
@@ -463,6 +479,7 @@ function activateL2(btn) {
   if (btn.dataset.l2 === 'calendar') renderCalendarPage();
   if (btn.dataset.l2 === 'plan') renderPlan();
   if (btn.dataset.l2 === 'analytics') renderAnalytics();
+  if (btn.dataset.l2 === 'reference') syncFromArchive();
 }
 
 // ---- API設定 ----
@@ -470,6 +487,8 @@ const apiFieldMap = [
   ['key-gemini', 'gemini'],
   ['key-threads-uid', 'threadsUserId'],
   ['key-threads-token', 'threadsToken'],
+  ['key-archive-url', 'archiveUrl'],
+  ['key-archive-key', 'archiveKey'],
 ];
 function initApiFields() {
   apiFieldMap.forEach(([elId, stateKey]) => {
@@ -479,6 +498,7 @@ function initApiFields() {
       state.apiKeys[stateKey] = el.value.trim();
       saveState();
       updateApiDots();
+      if (stateKey === 'archiveUrl' || stateKey === 'archiveKey') syncFromArchive();
     });
   });
   updateApiDots();
@@ -486,6 +506,7 @@ function initApiFields() {
 function updateApiDots() {
   document.getElementById('dot-gemini').classList.toggle('set', !!state.apiKeys.gemini);
   document.getElementById('dot-threads').classList.toggle('set', !!(state.apiKeys.threadsUserId && state.apiKeys.threadsToken));
+  document.getElementById('dot-archive').classList.toggle('set', !!(state.apiKeys.archiveUrl && state.apiKeys.archiveKey));
 }
 initApiFields();
 
@@ -517,9 +538,11 @@ document.getElementById('ref-add-btn').addEventListener('click', () => {
     date: document.getElementById('ref-date').value,
     likes: Number(document.getElementById('ref-likes').value || 0),
     replies: Number(document.getElementById('ref-replies').value || 0),
+    impressions: Number(document.getElementById('ref-impressions').value || 0),
+    source: 'manual',
   });
   saveState();
-  ['ref-main','ref-reply1','ref-reply2','ref-url','ref-date','ref-likes','ref-replies'].forEach(id => document.getElementById(id).value = '');
+  ['ref-main','ref-reply1','ref-reply2','ref-url','ref-date','ref-likes','ref-replies','ref-impressions'].forEach(id => document.getElementById(id).value = '');
   renderReference();
 });
 function deleteRefItem(id) {
@@ -537,7 +560,7 @@ function renderReference() {
   list.innerHTML = state.library.slice().reverse().map(item => `
     <div class="ref-item">
       <div class="ref-thread">
-        <div class="ref-node"><span class="ref-tag">本文</span>${escapeHtml(item.main)}</div>
+        <div class="ref-node"><span class="ref-tag">本文</span>${escapeHtml(item.main)}${item.source === 'auto' ? ' <span class="sub-hint">🤖自動収集</span>' : ''}</div>
         ${item.reply1 ? `<div class="ref-node reply"><span class="ref-tag">リプライ1</span>${escapeHtml(item.reply1)}</div>` : ''}
         ${item.reply2 ? `<div class="ref-node reply"><span class="ref-tag">リプライ2</span>${escapeHtml(item.reply2)}</div>` : ''}
       </div>
@@ -545,6 +568,7 @@ function renderReference() {
         ${item.date ? `<span>📅 ${item.date}</span>` : ''}
         <span>❤️ ${item.likes}</span>
         <span>💬 ${item.replies}</span>
+        ${item.impressions ? `<span>👁 ${item.impressions}</span>` : ''}
         ${item.url ? `<span><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">元投稿</a></span>` : ''}
       </div>
       <div class="actions">
@@ -553,6 +577,54 @@ function renderReference() {
     </div>
   `).join('');
 }
+
+// ---- バズ投稿アーカイブからの自動同期 ----
+async function syncFromArchive() {
+  const statusEl = document.getElementById('ref-sync-status');
+  const { archiveUrl, archiveKey } = state.apiKeys;
+  if (!archiveUrl || !archiveKey) {
+    if (statusEl) statusEl.textContent = 'アーカイブURL/Ingestキー未設定（API設定タブで入力してください）';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '同期中…';
+  try {
+    const res = await fetch(`${archiveUrl.replace(/\/$/, '')}/api/reference-posts?limit=50`, {
+      headers: { 'X-Ingest-Key': archiveKey },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rows = await res.json();
+    let added = 0, updated = 0;
+    rows.forEach((row) => {
+      if (!row.url || !row.text) return;
+      const existing = state.library.find((x) => x.url === row.url);
+      const item = {
+        id: existing ? existing.id : uid(),
+        main: row.text,
+        reply1: existing ? existing.reply1 : '',
+        reply2: existing ? existing.reply2 : '',
+        url: row.url,
+        date: row.posted_at || (existing ? existing.date : ''),
+        likes: row.likes ?? (existing ? existing.likes : 0),
+        replies: row.reply_count ?? (existing ? existing.replies : 0),
+        impressions: row.impressions ?? (existing ? existing.impressions : 0),
+        source: 'auto',
+      };
+      if (existing) {
+        Object.assign(existing, item);
+        updated++;
+      } else {
+        state.library.push(item);
+        added++;
+      }
+    });
+    saveState();
+    renderReference();
+    if (statusEl) statusEl.textContent = `同期完了（新規${added}件・更新${updated}件）`;
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `同期失敗: ${e.message}`;
+  }
+}
+document.getElementById('ref-sync-btn').addEventListener('click', syncFromArchive);
 
 // ---- 企画（投稿生成） ----
 function renderPlan() {
@@ -570,7 +642,7 @@ function buildReferenceText() {
         let block = `${i+1}. 本文:「${x.main}」`;
         if (x.reply1) block += `\n   → リプライ1:「${x.reply1}」`;
         if (x.reply2) block += `\n   → リプライ2:「${x.reply2}」`;
-        block += `\n   （いいね${x.likes}・リプライ${x.replies}）`;
+        block += `\n   （いいね${x.likes}・リプライ${x.replies}${x.impressions ? `・インプレッション${x.impressions}` : ''}）`;
         return block;
       }).join('\n')
     : '（参照投稿は空です。一般的なビジネス系Threads投稿として作成してください）';
@@ -839,6 +911,7 @@ function renderAnalytics() {
 // ---- init ----
 renderReference();
 renderCalendarPage();
+syncFromArchive();
 </script>
 </body>
 </html>
